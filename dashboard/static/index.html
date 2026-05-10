@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NeuroScan AI — Brain Tumor Diagnostic Dashboard</title>
+  <meta name="description" content="Explainable AI-powered brain tumor classification from MRI scans using EfficientNet-B4 and Grad-CAM visualization." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="20" cy="20" r="18" stroke="url(#g1)" stroke-width="2"/>
+          <path d="M12 20C12 15.58 15.58 12 20 12C24.42 12 28 15.58 28 20" stroke="url(#g1)" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="20" cy="20" r="4" fill="url(#g1)"/>
+          <path d="M20 8V12M20 28V32M8 20H12M28 20H32" stroke="#00d4ff" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+          <defs>
+            <linearGradient id="g1" x1="2" y1="2" x2="38" y2="38" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#00d4ff"/>
+              <stop offset="1" stop-color="#7c3aed"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-name">NeuroScan <span class="brand-ai">AI</span></h1>
+        <p class="brand-sub">Brain Tumor Diagnostic Dashboard</p>
+      </div>
+    </div>
+    <div class="header-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">Connecting…</span>
+      <div class="device-badge" id="deviceBadge">—</div>
+    </div>
+  </header>
+
+  <!-- ── Main Layout ────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Left Column: Upload + Results -->
+    <div class="col-left">
+
+      <!-- Upload Card -->
+      <div class="card" id="uploadCard">
+        <div class="card-header">
+          <span class="card-icon">🧠</span>
+          <h2 class="card-title">MRI Analysis</h2>
+          <div class="mode-toggle">
+            <button class="mode-btn active" id="btnSingle" onclick="setMode('single')">Single</button>
+            <button class="mode-btn" id="btnBatch" onclick="setMode('batch')">Batch</button>
+          </div>
+        </div>
+
+        <!-- Upload Zone -->
+        <div class="upload-zone" id="uploadZone"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event)"
+             onclick="document.getElementById('fileInput').click()">
+          <div class="upload-icon">
+            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="32" cy="32" r="30" stroke="url(#ug)" stroke-width="1.5" stroke-dasharray="4 4"/>
+              <path d="M32 42V28M32 28L26 34M32 28L38 34" stroke="url(#ug)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <rect x="20" y="44" width="24" height="4" rx="2" fill="url(#ug)" opacity="0.4"/>
+              <defs>
+                <linearGradient id="ug" x1="2" y1="2" x2="62" y2="62" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#00d4ff"/><stop offset="1" stop-color="#7c3aed"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <p class="upload-title">Drop MRI Image Here</p>
+          <p class="upload-sub">or click to browse — JPG, PNG, BMP supported</p>
+          <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileSelect(event)" />
+          <input type="file" id="batchInput" accept="image/*" multiple style="display:none" onchange="handleBatchSelect(event)" />
+        </div>
+
+        <!-- Preview -->
+        <div class="preview-section" id="previewSection" style="display:none">
+          <div class="preview-wrap">
+            <img id="previewImg" class="preview-img" src="" alt="MRI Preview" />
+            <div class="preview-badge" id="previewBadge">MRI Scan</div>
+          </div>
+          <div class="preview-info">
+            <div class="info-row"><span class="info-label">File</span><span id="infoName" class="info-val">—</span></div>
+            <div class="info-row"><span class="info-label">Size</span><span id="infoSize" class="info-val">—</span></div>
+            <div class="info-row"><span class="info-label">Dims</span><span id="infoDims" class="info-val">—</span></div>
+          </div>
+          <button class="btn-analyze" id="btnAnalyze" onclick="analyzeImage()">
+            <span class="btn-icon">⚡</span>  Analyze MRI
+          </button>
+        </div>
+      </div>
+
+      <!-- Result Card -->
+      <div class="card result-card" id="resultCard" style="display:none">
+        <div class="card-header">
+          <span class="card-icon">📊</span>
+          <h2 class="card-title">Classification Result</h2>
+          <div class="confidence-pill" id="confPill">—</div>
+        </div>
+
+        <div class="result-main">
+          <div class="result-label-wrap">
+            <div class="result-label" id="resultLabel">—</div>
+            <div class="result-sublabel" id="resultSublabel">—</div>
+            <div class="result-warning" id="resultWarning" style="display:none">
+              ⚠️ Low confidence — consult specialist
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="probChart" width="180" height="180"></canvas>
+            <div class="chart-center" id="chartCenter">—</div>
+          </div>
+        </div>
+
+        <!-- Probability bars -->
+        <div class="prob-bars" id="probBars"></div>
+
+        <!-- Action buttons -->
+        <div class="action-btns">
+          <button class="btn-action" onclick="loadGradCAM()" id="btnGradcam">
+            🔥 Grad-CAM Overlay
+          </button>
+          <button class="btn-action btn-secondary" onclick="loadAllClasses()" id="btnAllCam">
+            🎯 All-Class Analysis
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Explainability + History -->
+    <div class="col-right">
+
+      <!-- Grad-CAM Card -->
+      <div class="card gradcam-card" id="gradcamCard" style="display:none">
+        <div class="card-header">
+          <span class="card-icon">🔬</span>
+          <h2 class="card-title">Explainability — Grad-CAM</h2>
+          <div class="cam-tabs" id="camTabs">
+            <button class="cam-tab active" onclick="showView('single')">Predicted</button>
+            <button class="cam-tab" onclick="showView('all')">All Classes</button>
+          </div>
+        </div>
+
+        <!-- Single Grad-CAM view -->
+        <div id="singleView">
+          <div class="cam-compare">
+            <div class="cam-panel">
+              <div class="cam-panel-label">Original MRI</div>
+              <img id="camOriginal" class="cam-img" src="" alt="Original" />
+            </div>
+            <div class="cam-divider">↔</div>
+            <div class="cam-panel">
+              <div class="cam-panel-label">Grad-CAM Activation</div>
+              <img id="camOverlay" class="cam-img" src="" alt="Grad-CAM" />
+            </div>
+          </div>
+          <div class="cam-info-box">
+            <div class="cam-info-icon">ℹ️</div>
+            <p class="cam-info-text">
+              Grad-CAM highlights regions that most influenced the prediction.
+              Warmer colors (red/yellow) indicate higher activation — where the model
+              "looks" to identify the tumor type.
+            </p>
+          </div>
+        </div>
+
+        <!-- All-class CAM view -->
+        <div id="allView" style="display:none">
+          <div class="all-cam-grid" id="allCamGrid">
+            <!-- populated by JS -->
+          </div>
+        </div>
+
+        <!-- Loading spinner -->
+        <div class="cam-loading" id="camLoading" style="display:none">
+          <div class="spinner"></div>
+          <p>Generating Grad-CAM…</p>
+        </div>
+      </div>
+
+      <!-- Diagnostic Summary -->
+      <div class="card summary-card" id="summaryCard" style="display:none">
+        <div class="card-header">
+          <span class="card-icon">🩺</span>
+          <h2 class="card-title">Diagnostic Summary</h2>
+        </div>
+        <div class="summary-grid" id="summaryGrid"></div>
+        <div class="disclaimer">
+          <strong>⚠️ Disclaimer:</strong> This AI system is intended for research and educational
+          purposes only. It is not a substitute for professional medical diagnosis.
+          Always consult a qualified radiologist or neurologist.
+        </div>
+      </div>
+
+      <!-- History Card -->
+      <div class="card history-card" id="historyCard">
+        <div class="card-header">
+          <span class="card-icon">📋</span>
+          <h2 class="card-title">Inference History</h2>
+          <button class="btn-clear" onclick="clearHistory()">Clear</button>
+        </div>
+        <div class="history-list" id="historyList">
+          <div class="history-empty">No analyses yet. Upload an MRI to begin.</div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ── Loading Overlay ────────────────────────────────────────────────── -->
+  <div class="loading-overlay" id="loadingOverlay" style="display:none">
+    <div class="loading-box">
+      <div class="spinner large"></div>
+      <p class="loading-text" id="loadingText">Analyzing MRI…</p>
+      <p class="loading-sub">EfficientNet-B4 inference</p>
+    </div>
+  </div>
+
+  <!-- ── Toast ─────────────────────────────────────────────────────────── -->
+  <div class="toast" id="toast"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
